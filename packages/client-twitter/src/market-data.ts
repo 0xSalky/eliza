@@ -4,8 +4,7 @@ const { Pool } = pkg;
 
 // Create a connection pool
 const pool = new Pool({
-    connectionString:
-        "postgres://railway:u99akldy8eaj07hk8nryd5ly54irqybj@junction.proxy.rlwy.net:41500/railway",
+    connectionString: "",
     ssl: false, // Disable SSL
 });
 
