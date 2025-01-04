@@ -223,78 +223,95 @@ export class TwitterInteractionClient {
                 );
             }
 
-            // Sort tweet candidates by ID in ascending order
-            uniqueTweetCandidates
+            // Sort tweet candidates by ID in ascending order and filter out bot's own tweets
+            uniqueTweetCandidates = uniqueTweetCandidates
                 .sort((a, b) => a.id.localeCompare(b.id))
                 .filter((tweet) => tweet.userId !== this.client.profile.id);
 
+            let maxTweetId = BigInt(0);
+
             // for each tweet candidate, handle the tweet
             for (const tweet of uniqueTweetCandidates) {
-                if (
-                    !this.client.lastCheckedTweetId ||
-                    BigInt(tweet.id) > this.client.lastCheckedTweetId
-                ) {
-                    // Generate the tweetId UUID the same way it's done in handleTweet
-                    const tweetId = stringToUuid(
-                        tweet.id + "-" + this.runtime.agentId
-                    );
-
-                    // Check if we've already processed this tweet
-                    const existingResponse =
-                        await this.runtime.messageManager.getMemoryById(
-                            tweetId
-                        );
-
-                    if (existingResponse) {
-                        elizaLogger.log(
-                            `Already responded to tweet ${tweet.id}, skipping`
-                        );
-                        continue;
+                try {
+                    // Update max tweet ID
+                    const tweetIdBigInt = BigInt(tweet.id);
+                    if (tweetIdBigInt > maxTweetId) {
+                        maxTweetId = tweetIdBigInt;
                     }
-                    elizaLogger.log("New Tweet found", tweet.permanentUrl);
 
-                    const roomId = stringToUuid(
-                        tweet.conversationId + "-" + this.runtime.agentId
+                    if (
+                        !this.client.lastCheckedTweetId ||
+                        tweetIdBigInt > this.client.lastCheckedTweetId
+                    ) {
+                        // Generate the tweetId UUID the same way it's done in handleTweet
+                        const tweetId = stringToUuid(
+                            tweet.id + "-" + this.runtime.agentId
+                        );
+
+                        // Check if we've already processed this tweet
+                        const existingResponse =
+                            await this.runtime.messageManager.getMemoryById(
+                                tweetId
+                            );
+
+                        if (existingResponse) {
+                            elizaLogger.log(
+                                `Already responded to tweet ${tweet.id}, skipping`
+                            );
+                            continue;
+                        }
+
+                        elizaLogger.log("New Tweet found", tweet.permanentUrl);
+
+                        const roomId = stringToUuid(
+                            tweet.conversationId + "-" + this.runtime.agentId
+                        );
+
+                        const userIdUUID =
+                            tweet.userId === this.client.profile.id
+                                ? this.runtime.agentId
+                                : stringToUuid(tweet.userId!);
+
+                        await this.runtime.ensureConnection(
+                            userIdUUID,
+                            roomId,
+                            tweet.username,
+                            tweet.name,
+                            "twitter"
+                        );
+
+                        const thread = await buildConversationThread(
+                            tweet,
+                            this.client
+                        );
+
+                        const message = {
+                            content: { text: tweet.text },
+                            agentId: this.runtime.agentId,
+                            userId: userIdUUID,
+                            roomId,
+                        };
+
+                        await this.handleTweet({
+                            tweet,
+                            message,
+                            thread,
+                        });
+                    }
+                } catch (error) {
+                    elizaLogger.error(
+                        `Error processing tweet ${tweet.id}:`,
+                        error
                     );
-
-                    const userIdUUID =
-                        tweet.userId === this.client.profile.id
-                            ? this.runtime.agentId
-                            : stringToUuid(tweet.userId!);
-
-                    await this.runtime.ensureConnection(
-                        userIdUUID,
-                        roomId,
-                        tweet.username,
-                        tweet.name,
-                        "twitter"
-                    );
-
-                    const thread = await buildConversationThread(
-                        tweet,
-                        this.client
-                    );
-
-                    const message = {
-                        content: { text: tweet.text },
-                        agentId: this.runtime.agentId,
-                        userId: userIdUUID,
-                        roomId,
-                    };
-
-                    await this.handleTweet({
-                        tweet,
-                        message,
-                        thread,
-                    });
-
-                    // Update the last checked tweet ID after processing each tweet
-                    this.client.lastCheckedTweetId = BigInt(tweet.id);
                 }
             }
 
-            // Save the latest checked tweet ID to the file
-            await this.client.cacheLatestCheckedTweetId();
+            // Update the last checked tweet ID with the maximum ID we've seen
+            if (maxTweetId > BigInt(0)) {
+                this.client.lastCheckedTweetId = maxTweetId;
+                // Save the latest checked tweet ID to the file
+                await this.client.cacheLatestCheckedTweetId();
+            }
 
             elizaLogger.log("Finished checking Twitter interactions");
         } catch (error) {
