@@ -16,34 +16,64 @@ import { IImageDescriptionService, ServiceType } from "@elizaos/core";
 import { buildConversationThread } from "./utils.ts";
 import { twitterMessageHandlerTemplate } from "./interactions.ts";
 import { DEFAULT_MAX_TWEET_LENGTH } from "./environment.ts";
+import {
+    getMarketOverallSummary,
+    getMarketOverallSummaryWithAssets,
+} from "./market-data.ts";
 
-const twitterPostTemplate = `
-# Areas of Expertise
-{{knowledge}}
+const twitterPostTemplate = (
+    marketData: string
+) => `Create a fun, engaging tweet about the crypto market state.
+Write it like a degen trader talking to their friends. Weave the symbols naturally into your analysis.
 
-# About {{agentName}} (@{{twitterUserName}}):
-{{bio}}
-{{lore}}
-{{topics}}
+Style Guide:
+- Write like you're texting your crypto friends
+- Integrate symbols naturally in your sentences (e.g., "SOL looking ready to send it")
+- MAXIMUM 270 CHARACTERS (this is critical)
+- Mix technical and simple language
+- Each symbol should appear ONLY ONCE
+- No emojis
 
-{{providers}}
+Example flow (don't copy, just style reference):
+"Market's heating up! ETH funding getting spicy while LINK chads accumulating.
+Keep BTC on watch - that 1H looking juicy"
 
-{{characterPostExamples}}
+Remember:
+- STRICT 270 char limit
+- Each symbol from watchlist appears exactly once
+- Keep it conversational and natural
+- No separate watchlist section at the end
+- Make it fun but informative
 
-{{postDirections}}
+Do not add commentary or acknowledge this request, just write the post.
 
-# Task: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
-Write a post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
-Your response should be 1, 2, or 3 sentences (choose the length at random).
-Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than {{maxTweetLength}}. No emojis. Use \\n\\n (double spaces) between statements if there are multiple statements in your response.`;
+Here's the market data:
+${marketData}`;
 
-export const twitterActionTemplate =
+export const twitterActionTemplate = (marketData: string) =>
     `
 # INSTRUCTIONS: Determine actions for {{agentName}} (@{{twitterUserName}}) based on:
 {{bio}}
 {{postDirections}}
 
-Guidelines:
+# Market Context
+Current Market State:
+${marketData}
+
+Guidelines for Crypto Market Content:
+- PRIORITIZE engagement with:
+  - Technical analysis that aligns with current market data
+  - Market updates that complement our data
+  - Trading insights that match market conditions
+  - On-chain metrics and analysis
+- AVOID:
+  - Outdated market information
+  - Contradictory technical analysis
+  - Pure price speculation without substance
+  - Unsubstantiated rumors
+{{/if}}
+
+General Guidelines:
 - ONLY engage with content that DIRECTLY relates to character's core interests
 - Direct mentions are priority IF they are on-topic
 - Skip ALL content that is:
@@ -419,6 +449,8 @@ export class TwitterPostClient {
                 "twitter"
             );
 
+            const marketOverallSummary = await getMarketOverallSummary();
+
             const topics = this.runtime.character.topics.join(", ");
 
             const state = await this.runtime.composeState(
@@ -440,7 +472,7 @@ export class TwitterPostClient {
                 state,
                 template:
                     this.runtime.character.templates?.twitterPostTemplate ||
-                    twitterPostTemplate,
+                    twitterPostTemplate(marketOverallSummary),
             });
 
             elizaLogger.debug("generate post prompt:\n" + context);
@@ -528,6 +560,7 @@ export class TwitterPostClient {
 
     private async generateTweetContent(
         tweetState: any,
+        marketData: string,
         options?: {
             template?: string;
             context?: string;
@@ -538,7 +571,7 @@ export class TwitterPostClient {
             template:
                 options?.template ||
                 this.runtime.character.templates?.twitterPostTemplate ||
-                twitterPostTemplate,
+                twitterPostTemplate(marketData),
         });
 
         const response = await generateText({
@@ -582,7 +615,7 @@ export class TwitterPostClient {
     }
 
     // Helper method to ensure tweet length compliance
-    private trimTweetLength(text: string, maxLength: number = 280): string {
+    private trimTweetLength(text: string, maxLength: number = 7): string {
         if (text.length <= maxLength) return text;
 
         // Try to cut at last sentence
@@ -626,6 +659,10 @@ export class TwitterPostClient {
             );
 
             const homeTimeline = await this.client.fetchTimelineForActions(15);
+
+            const marketOverallSummaryWithAssets =
+                await getMarketOverallSummaryWithAssets();
+
             const results = [];
 
             for (const tweet of homeTimeline) {
@@ -664,7 +701,9 @@ export class TwitterPostClient {
                         template:
                             this.runtime.character.templates
                                 ?.twitterActionTemplate ||
-                            twitterActionTemplate,
+                            twitterActionTemplate(
+                                marketOverallSummaryWithAssets
+                            ),
                     });
 
                     const actionResponse = await generateTweetActions({
@@ -814,12 +853,18 @@ export class TwitterPostClient {
                                 );
 
                             const quoteContent =
-                                await this.generateTweetContent(enrichedState, {
-                                    template:
-                                        this.runtime.character.templates
-                                            ?.twitterMessageHandlerTemplate ||
-                                        twitterMessageHandlerTemplate,
-                                });
+                                await this.generateTweetContent(
+                                    enrichedState,
+                                    marketOverallSummaryWithAssets,
+                                    {
+                                        template:
+                                            this.runtime.character.templates
+                                                ?.twitterMessageHandlerTemplate ||
+                                            twitterMessageHandlerTemplate(
+                                                marketOverallSummaryWithAssets
+                                            ),
+                                    }
+                                );
 
                             if (!quoteContent) {
                                 elizaLogger.error(
@@ -1009,13 +1054,22 @@ export class TwitterPostClient {
                 }
             );
 
+            const marketOverallSummaryWithAssets =
+                await getMarketOverallSummaryWithAssets();
+
             // Generate and clean the reply content
-            const replyText = await this.generateTweetContent(enrichedState, {
-                template:
-                    this.runtime.character.templates
-                        ?.twitterMessageHandlerTemplate ||
-                    twitterMessageHandlerTemplate,
-            });
+            const replyText = await this.generateTweetContent(
+                enrichedState,
+                marketOverallSummaryWithAssets,
+                {
+                    template:
+                        this.runtime.character.templates
+                            ?.twitterMessageHandlerTemplate ||
+                        twitterMessageHandlerTemplate(
+                            marketOverallSummaryWithAssets
+                        ),
+                }
+            );
 
             if (!replyText) {
                 elizaLogger.error("Failed to generate valid reply content");

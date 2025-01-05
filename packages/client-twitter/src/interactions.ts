@@ -17,29 +17,31 @@ import {
 } from "@elizaos/core";
 import { ClientBase } from "./base";
 import { buildConversationThread, sendTweet, wait } from "./utils.ts";
+import { getMarketOverallSummaryWithAssets } from "./market-data.ts";
 
-export const twitterMessageHandlerTemplate =
+export const twitterMessageHandlerTemplate = (marketData: string) =>
     `
-# Areas of Expertise
-{{knowledge}}
+Create a fun, engaging reply about the crypto market state.
+Write it like a degen trader talking to their friends. Weave the symbols naturally into your analysis.
 
-# About {{agentName}} (@{{twitterUserName}}):
-{{bio}}
-{{lore}}
-{{topics}}
+Style Guide:
+- Write like you're texting your crypto friends
+- Integrate symbols naturally in your sentences (e.g., "SOL looking ready to send it")
+- MAXIMUM 270 CHARACTERS (this is critical)
+- Mix technical and simple language
+- Each symbol should appear ONLY ONCE
+- No emojis
 
-{{providers}}
+Example flow (don't copy, just style reference):
+"Market's heating up! ETH funding getting spicy while LINK chads accumulating.
+Keep BTC on watch - that 1H looking juicy"
 
-{{characterPostExamples}}
-
-{{postDirections}}
-
-Recent interactions between {{agentName}} and other users:
-{{recentPostInteractions}}
-
-{{recentPosts}}
-
-# TASK: Generate a post/reply in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}) while using the thread of tweets as additional context:
+Remember:
+- STRICT 280 char limit
+- Each symbol from watchlist appears exactly once
+- Keep it conversational and natural
+- No separate watchlist section at the end
+- Make it fun but informative
 
 Current Post:
 {{currentPost}}
@@ -47,20 +49,32 @@ Current Post:
 Thread of Tweets You Are Replying To:
 {{formattedConversation}}
 
-# INSTRUCTIONS: Generate a post in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}). You MUST include an action if the current post text includes a prompt that is similar to one of the available actions mentioned here:
-{{actionNames}}
-{{actions}}
+Here's the market data:
+${marketData}
 
-Here is the current post text again. Remember to include an action if the current post text includes a prompt that asks for one of the available actions mentioned above (does not need to be exact)
-{{currentPost}}
-` + messageCompletionFooter;
+Do not add commentary or acknowledge this request, just write the reply.` +
+    messageCompletionFooter;
 
-export const twitterShouldRespondTemplate = (targetUsersStr: string) =>
+export const twitterShouldRespondTemplate = (
+    targetUsersStr: string,
+    marketData: string
+) =>
     `# INSTRUCTIONS: Determine if {{agentName}} (@{{twitterUserName}}) should respond to the message and participate in the conversation. Do not comment. Just respond with "true" or "false".
 
 Response options are RESPOND, IGNORE and STOP.
 
 PRIORITY RULE: ALWAYS RESPOND to these users regardless of topic or message content: ${targetUsersStr}. Topic relevance should be ignored for these users.
+
+Market Discussion Rules:
+- RESPOND to discussions about current market conditions in our data
+- RESPOND to technical analysis that can be validated with our data
+- RESPOND to questions about market trends we can verify
+- IGNORE price predictions without technical basis
+- IGNORE market rumors we cannot verify
+- IGNORE outdated market information
+
+Here's the market data:
+${marketData}
 
 For other users:
 - {{agentName}} should RESPOND to messages directed at them
@@ -84,8 +98,8 @@ Current Post:
 Thread of Tweets You Are Replying To:
 {{formattedConversation}}
 
-# INSTRUCTIONS: Respond with [RESPOND] if {{agentName}} should respond, or [IGNORE] if {{agentName}} should not respond to the last message and [STOP] if {{agentName}} should stop participating in the conversation.
-` + shouldRespondFooter;
+# INSTRUCTIONS: Respond with [RESPOND] if {{agentName}} should respond, or [IGNORE] if {{agentName}} should not respond to the last message and [STOP] if {{agentName}} should stop participating in the conversation.` +
+    shouldRespondFooter;
 
 export class TwitterInteractionClient {
     client: ClientBase;
@@ -382,13 +396,19 @@ export class TwitterInteractionClient {
         const validTargetUsersStr =
             this.client.twitterConfig.TWITTER_TARGET_USERS.join(",");
 
+        const marketOverallSummaryWithAssets =
+            await getMarketOverallSummaryWithAssets();
+
         const shouldRespondContext = composeContext({
             state,
             template:
                 this.runtime.character.templates
                     ?.twitterShouldRespondTemplate ||
                 this.runtime.character?.templates?.shouldRespondTemplate ||
-                twitterShouldRespondTemplate(validTargetUsersStr),
+                twitterShouldRespondTemplate(
+                    validTargetUsersStr,
+                    marketOverallSummaryWithAssets
+                ),
         });
 
         const shouldRespond = await generateShouldRespond({
@@ -409,7 +429,7 @@ export class TwitterInteractionClient {
                 this.runtime.character.templates
                     ?.twitterMessageHandlerTemplate ||
                 this.runtime.character?.templates?.messageHandlerTemplate ||
-                twitterMessageHandlerTemplate,
+                twitterMessageHandlerTemplate(marketOverallSummaryWithAssets),
         });
 
         elizaLogger.debug("Interactions prompt:\n" + context);
