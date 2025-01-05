@@ -42,6 +42,8 @@ Remember:
 - Keep it conversational and natural
 - No separate watchlist section at the end
 - Make it fun but informative
+- If asked about a specific asset, check if it's in our data first
+- If asset not in our data, politely say you don't have current data for it
 
 Current Post:
 {{currentPost}}
@@ -51,6 +53,11 @@ Thread of Tweets You Are Replying To:
 
 Here's the market data:
 ${marketData}
+
+Instructions for asset-specific queries:
+1. If the user asks about a specific asset, check if it exists in assets_summary
+2. If found, use its data (price, funding rate, volume, etc.) in your response
+3. If not found, respond: "Sorry fam, don't have current data for that asset. Here's what's hot right now: [mention 2-3 top assets]"
 
 Do not add commentary or acknowledge this request, just write the reply.` +
     messageCompletionFooter;
@@ -69,6 +76,8 @@ Market Discussion Rules:
 - RESPOND to discussions about current market conditions in our data
 - RESPOND to technical analysis that can be validated with our data
 - RESPOND to questions about market trends we can verify
+- RESPOND to questions about specific assets IF they are in our assets_summary data
+- IGNORE questions about assets not in our current data
 - IGNORE price predictions without technical basis
 - IGNORE market rumors we cannot verify
 - IGNORE outdated market information
