@@ -16,34 +16,26 @@ import { IImageDescriptionService, ServiceType } from "@elizaos/core";
 import { buildConversationThread } from "./utils.ts";
 import { twitterMessageHandlerTemplate } from "./interactions.ts";
 import { DEFAULT_MAX_TWEET_LENGTH } from "./environment.ts";
-import { fetchMarketData } from "./market-data.ts";
 
-const twitterPostTemplate = `Create a fun, engaging tweet about the crypto market state.
-Write it like a degen trader talking to their friends. Weave the symbols naturally into your analysis.
+const twitterPostTemplate = `
+# Areas of Expertise
+{{knowledge}}
 
-Style Guide:
-- Write like you're texting your crypto friends
-- Integrate symbols naturally in your sentences (e.g., "SOL looking ready to send it")
-- MAXIMUM 270 CHARACTERS (this is critical)
-- Mix technical and simple language
-- Each symbol should appear ONLY ONCE
-- No emojis
+# About {{agentName}} (@{{twitterUserName}}):
+{{bio}}
+{{lore}}
+{{topics}}
 
-Example flow (don't copy, just style reference):
-"Market's heating up! ETH funding getting spicy while LINK chads accumulating.
-Keep BTC on watch - that 1H looking juicy"
+{{providers}}
 
-Remember:
-- STRICT 280 char limit
-- Each symbol from watchlist appears exactly once
-- Keep it conversational and natural
-- No separate watchlist section at the end
-- Make it fun but informative
+{{characterPostExamples}}
 
-Do not add commentary or acknowledge this request, just write the post.
+{{postDirections}}
 
-Here's the market data:
-{{marketData}}`;
+# Task: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
+Write a post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
+Your response should be 1, 2, or 3 sentences (choose the length at random).
+Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than {{maxTweetLength}}. No emojis. Use \\n\\n (double spaces) between statements if there are multiple statements in your response.`;
 
 export const twitterActionTemplate =
     `
@@ -51,25 +43,7 @@ export const twitterActionTemplate =
 {{bio}}
 {{postDirections}}
 
-{{#if marketData}}
-# Market Context
-Current Market State:
-{{marketData}}
-
-Guidelines for Crypto Market Content:
-- PRIORITIZE engagement with:
-  - Technical analysis that aligns with current market data
-  - Market updates that complement our data
-  - Trading insights that match market conditions
-  - On-chain metrics and analysis
-- AVOID:
-  - Outdated market information
-  - Contradictory technical analysis
-  - Pure price speculation without substance
-  - Unsubstantiated rumors
-{{/if}}
-
-General Guidelines:
+Guidelines:
 - ONLY engage with content that DIRECTLY relates to character's core interests
 - Direct mentions are priority IF they are on-topic
 - Skip ALL content that is:
@@ -433,8 +407,6 @@ export class TwitterPostClient {
      */
     private async generateNewTweet() {
         elizaLogger.log("Generating new tweet");
-        const MAX_ATTEMPTS = 20;
-        let attempt = 0;
 
         try {
             const roomId = stringToUuid(
@@ -447,107 +419,103 @@ export class TwitterPostClient {
                 "twitter"
             );
 
-            // Fetch market data and format it
-            const rawMarketData = await fetchMarketData();
-            const briefMetrics = {
-                metrics: rawMarketData.market_data.metrics,
-                watchlist: rawMarketData.trading_opportunities.watchlist,
-                market_signals: {
-                    risk_indicators:
-                        rawMarketData.market_signals.risk_indicators
-                            .market_state,
-                },
-            };
+            const topics = this.runtime.character.topics.join(", ");
 
-            let validTweet = null;
-
-            while (attempt < MAX_ATTEMPTS && !validTweet) {
-                attempt++;
-                elizaLogger.log(`Attempt ${attempt} of ${MAX_ATTEMPTS}`);
-
-                const state = await this.runtime.composeState(
-                    {
-                        userId: this.runtime.agentId,
-                        roomId: roomId,
-                        agentId: this.runtime.agentId,
-                        content: {
-                            text:
-                                this.runtime.character.topics.join(", ") || "",
-                            action: "TWEET",
-                        },
+            const state = await this.runtime.composeState(
+                {
+                    userId: this.runtime.agentId,
+                    roomId: roomId,
+                    agentId: this.runtime.agentId,
+                    content: {
+                        text: topics || "",
+                        action: "TWEET",
                     },
-                    {
-                        twitterUserName: this.client.profile.username,
-                        marketData: JSON.stringify(briefMetrics, null, 2),
-                        attempt:
-                            attempt > 1
-                                ? `Attempt ${attempt}: Please generate a shorter tweet under 280 characters.`
-                                : "",
-                    }
-                );
+                },
+                {
+                    twitterUserName: this.client.profile.username,
+                }
+            );
 
-                const context = composeContext({
-                    state,
-                    template:
-                        this.runtime.character.templates?.twitterPostTemplate ||
-                        twitterPostTemplate,
-                });
+            const context = composeContext({
+                state,
+                template:
+                    this.runtime.character.templates?.twitterPostTemplate ||
+                    twitterPostTemplate,
+            });
 
-                elizaLogger.debug(
-                    `Generate post prompt (attempt ${attempt}):\n` + context
-                );
+            elizaLogger.debug("generate post prompt:\n" + context);
 
-                const newTweetContent = await generateText({
-                    runtime: this.runtime,
-                    context,
-                    modelClass: ModelClass.SMALL,
-                });
+            const newTweetContent = await generateText({
+                runtime: this.runtime,
+                context,
+                modelClass: ModelClass.SMALL,
+            });
 
-                // Clean the content
-                const cleanedContent = newTweetContent
-                    .trim()
+            // First attempt to clean content
+            let cleanedContent = "";
+
+            // Try parsing as JSON first
+            try {
+                const parsedResponse = JSON.parse(newTweetContent);
+                if (parsedResponse.text) {
+                    cleanedContent = parsedResponse.text;
+                } else if (typeof parsedResponse === "string") {
+                    cleanedContent = parsedResponse;
+                }
+            } catch (error) {
+                error.linted = true; // make linter happy since catch needs a variable
+                // If not JSON, clean the raw content
+                cleanedContent = newTweetContent
                     .replace(/^\s*{?\s*"text":\s*"|"\s*}?\s*$/g, "") // Remove JSON-like wrapper
                     .replace(/^['"](.*)['"]$/g, "$1") // Remove quotes
                     .replace(/\\"/g, '"') // Unescape quotes
-                    .replace(/\\n/g, "\n\n") // Unescape newlines
+                    .replace(/\\n/g, "\n\n") // Unescape newlines, ensures double spaces
                     .trim();
-
-                elizaLogger.log(
-                    `Generated tweet (${cleanedContent.length} chars): ${cleanedContent}`
-                );
-
-                if (cleanedContent.length <= 280) {
-                    validTweet = cleanedContent;
-                    elizaLogger.log(`Found valid tweet on attempt ${attempt}`);
-                } else {
-                    elizaLogger.warn(
-                        `Tweet too long (${cleanedContent.length} chars), retrying...`
-                    );
-                }
             }
 
-            if (!validTweet) {
+            if (!cleanedContent) {
                 elizaLogger.error(
-                    `Failed to generate valid tweet within ${MAX_ATTEMPTS} attempts`
+                    "Failed to extract valid content from response:",
+                    {
+                        rawResponse: newTweetContent,
+                        attempted: "JSON parsing",
+                    }
                 );
                 return;
             }
 
+            // Truncate the content to the maximum tweet length specified in the environment settings, ensuring the truncation respects sentence boundaries.
+            const maxTweetLength = this.client.twitterConfig.MAX_TWEET_LENGTH;
+            if (maxTweetLength) {
+                cleanedContent = truncateToCompleteSentence(
+                    cleanedContent,
+                    maxTweetLength
+                );
+            }
+
+            const removeQuotes = (str: string) =>
+                str.replace(/^['"](.*)['"]$/, "$1");
+
+            const fixNewLines = (str: string) => str.replaceAll(/\\n/g, "\n\n"); //ensures double spaces
+
+            // Final cleaning
+            cleanedContent = removeQuotes(fixNewLines(cleanedContent));
+
             if (this.isDryRun) {
                 elizaLogger.info(
-                    `Dry run: would have posted tweet: ${validTweet}`
+                    `Dry run: would have posted tweet: ${cleanedContent}`
                 );
                 return;
             }
 
             try {
-                elizaLogger.log(`Posting new tweet:\n ${validTweet}`);
+                elizaLogger.log(`Posting new tweet:\n ${cleanedContent}`);
                 this.postTweet(
                     this.runtime,
                     this.client,
-                    validTweet,
+                    cleanedContent,
                     roomId,
-                    validTweet,
+                    newTweetContent,
                     this.twitterUsername
                 );
             } catch (error) {
@@ -979,10 +947,6 @@ export class TwitterPostClient {
         tweetState: any,
         executedActions: string[]
     ) {
-        const MAX_ATTEMPTS = 20;
-        let attempt = 0;
-        let validReply = null;
-
         try {
             // Build conversation thread for context
             const thread = await buildConversationThread(tweet, this.client);
@@ -993,112 +957,109 @@ export class TwitterPostClient {
                 )
                 .join("\n\n");
 
-            // Fetch market data
-            const rawMarketData = await fetchMarketData();
-            const briefMetrics = {
-                metrics: rawMarketData.market_data.metrics,
-                watchlist: rawMarketData.trading_opportunities.watchlist,
-                market_signals: {
-                    risk_indicators:
-                        rawMarketData.market_signals.risk_indicators
-                            .market_state,
-                },
-            };
-
-            while (attempt < MAX_ATTEMPTS && !validReply) {
-                attempt++;
-                elizaLogger.log(`Reply attempt ${attempt} of ${MAX_ATTEMPTS}`);
-
-                // Compose rich state with all context
-                const enrichedState = await this.runtime.composeState(
-                    {
-                        userId: this.runtime.agentId,
-                        roomId: stringToUuid(
-                            tweet.conversationId + "-" + this.runtime.agentId
-                        ),
-                        agentId: this.runtime.agentId,
-                        content: { text: tweet.text, action: "REPLY" },
-                    },
-                    {
-                        twitterUserName: this.twitterUsername,
-                        currentPost: `From @${tweet.username}: ${tweet.text}`,
-                        formattedConversation,
-                        marketData: JSON.stringify(briefMetrics, null, 2),
-                        attempt:
-                            attempt > 1
-                                ? `Attempt ${attempt}: Please generate a shorter reply under 280 characters.`
-                                : "",
-                    }
-                );
-
-                const replyContent = await generateText({
-                    runtime: this.runtime,
-                    context: composeContext({
-                        state: enrichedState,
-                        template:
-                            this.runtime.character.templates
-                                ?.twitterMessageHandlerTemplate ||
-                            twitterMessageHandlerTemplate,
-                    }),
-                    modelClass: ModelClass.SMALL,
-                });
-
-                // Clean the content
-                const cleanedContent = replyContent
-                    .trim()
-                    .replace(/^\s*{?\s*"text":\s*"|"\s*}?\s*$/g, "")
-                    .replace(/^['"](.*)['"]$/g, "$1")
-                    .replace(/\\"/g, '"')
-                    .replace(/\\n/g, "\n\n")
-                    .trim();
-
-                elizaLogger.log(
-                    `Generated reply (${cleanedContent.length} chars): ${cleanedContent}`
-                );
-
-                if (cleanedContent.length <= 280) {
-                    validReply = cleanedContent;
-                    elizaLogger.log(`Found valid reply on attempt ${attempt}`);
-
-                    // Cache generation context when we find a valid reply
-                    await this.runtime.cacheManager.set(
-                        `twitter/reply_generation_${tweet.id}.txt`,
-                        `Context:\n${enrichedState}\n\nGenerated Reply:\n${validReply}`
-                    );
-                } else {
-                    elizaLogger.warn(
-                        `Reply too long (${cleanedContent.length} chars), retrying...`
-                    );
+            // Generate image descriptions if present
+            const imageDescriptions = [];
+            if (tweet.photos?.length > 0) {
+                elizaLogger.log("Processing images in tweet for context");
+                for (const photo of tweet.photos) {
+                    const description = await this.runtime
+                        .getService<IImageDescriptionService>(
+                            ServiceType.IMAGE_DESCRIPTION
+                        )
+                        .describeImage(photo.url);
+                    imageDescriptions.push(description);
                 }
             }
 
-            if (!validReply) {
-                elizaLogger.error(
-                    `Failed to generate valid reply within ${MAX_ATTEMPTS} attempts`
-                );
+            // Handle quoted tweet if present
+            let quotedContent = "";
+            if (tweet.quotedStatusId) {
+                try {
+                    const quotedTweet =
+                        await this.client.twitterClient.getTweet(
+                            tweet.quotedStatusId
+                        );
+                    if (quotedTweet) {
+                        quotedContent = `\nQuoted Tweet from @${quotedTweet.username}:\n${quotedTweet.text}`;
+                    }
+                } catch (error) {
+                    elizaLogger.error("Error fetching quoted tweet:", error);
+                }
+            }
+
+            // Compose rich state with all context
+            const enrichedState = await this.runtime.composeState(
+                {
+                    userId: this.runtime.agentId,
+                    roomId: stringToUuid(
+                        tweet.conversationId + "-" + this.runtime.agentId
+                    ),
+                    agentId: this.runtime.agentId,
+                    content: { text: tweet.text, action: "" },
+                },
+                {
+                    twitterUserName: this.twitterUsername,
+                    currentPost: `From @${tweet.username}: ${tweet.text}`,
+                    formattedConversation,
+                    imageContext:
+                        imageDescriptions.length > 0
+                            ? `\nImages in Tweet:\n${imageDescriptions.map((desc, i) => `Image ${i + 1}: ${desc}`).join("\n")}`
+                            : "",
+                    quotedContent,
+                }
+            );
+
+            // Generate and clean the reply content
+            const replyText = await this.generateTweetContent(enrichedState, {
+                template:
+                    this.runtime.character.templates
+                        ?.twitterMessageHandlerTemplate ||
+                    twitterMessageHandlerTemplate,
+            });
+
+            if (!replyText) {
+                elizaLogger.error("Failed to generate valid reply content");
                 return;
             }
 
             if (this.isDryRun) {
                 elizaLogger.info(
-                    `Dry run: would have replied to tweet ${tweet.id}: ${validReply}`
+                    `Dry run: reply to tweet ${tweet.id} would have been: ${replyText}`
                 );
                 executedActions.push("reply (dry run)");
                 return;
             }
 
-            // Send the reply
-            const result = await this.client.requestQueue.add(
-                async () =>
-                    await this.client.twitterClient.sendTweet(
-                        validReply,
-                        tweet.id
-                    )
-            );
+            elizaLogger.debug("Final reply text to be sent:", replyText);
+
+            let result;
+
+            if (replyText.length > DEFAULT_MAX_TWEET_LENGTH) {
+                result = await this.handleNoteTweet(
+                    this.client,
+                    this.runtime,
+                    replyText,
+                    tweet.id
+                );
+            } else {
+                result = await this.sendStandardTweet(
+                    this.client,
+                    replyText,
+                    tweet.id
+                );
+            }
 
             if (result) {
                 elizaLogger.log("Successfully posted reply tweet");
                 executedActions.push("reply");
+
+                // Cache generation context for debugging
+                await this.runtime.cacheManager.set(
+                    `twitter/reply_generation_${tweet.id}.txt`,
+                    `Context:\n${enrichedState}\n\nGenerated Reply:\n${replyText}`
+                );
+            } else {
+                elizaLogger.error("Tweet reply creation failed");
             }
         } catch (error) {
             elizaLogger.error("Error in handleTextOnlyReply:", error);
