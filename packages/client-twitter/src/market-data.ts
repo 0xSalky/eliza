@@ -34,21 +34,23 @@ export const fetchLlmSummaryWithAssets = async () => {
     const client = await pool.connect();
 
     try {
+        // Get the latest market summary
         const llmSummary = await client.query(
             "SELECT summary_data FROM market_summary_for_llm ORDER BY analysis_timestamp DESC LIMIT 1"
         );
 
+        // Get the latest assets analysis
         const assetsSummary = await client.query(
-            "SELECT summary_data FROM market_assets_summary ORDER BY analysis_timestamp DESC LIMIT 1"
+            "SELECT * FROM market_assets_analysis ORDER BY timestamp DESC LIMIT 1"
         );
 
-        if (llmSummary.rows.length === 0 || assetsSummary.rows.length === 0) {
-            throw new Error("No market data available");
+        if (llmSummary.rows.length === 0) {
+            throw new Error("No market summary data available");
         }
 
         const result = {
             llmSummary: llmSummary.rows[0].summary_data,
-            assetsSummary: assetsSummary.rows[0].summary_data,
+            assetsSummary: assetsSummary.rows[0],
         };
 
         return result;
