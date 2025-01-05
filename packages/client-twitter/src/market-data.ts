@@ -64,12 +64,11 @@ export const getMarketOverallSummary = async (): Promise<string> => {
     const rawMarketData = await fetchLlmSummary();
 
     const marketOverallSummaryWithAssets = {
-        metrics: rawMarketData.llmSummary.market_data.metrics,
-        watchlist: rawMarketData.llmSummary.trading_opportunities.watchlist,
+        metrics: rawMarketData.market_data.metrics,
+        watchlist: rawMarketData.trading_opportunities.watchlist,
         market_signals: {
             risk_indicators:
-                rawMarketData.llmSummary.market_signals.risk_indicators
-                    .market_state,
+                rawMarketData.market_signals.risk_indicators.market_state,
         },
     };
     return JSON.stringify(marketOverallSummaryWithAssets, null, 2);
