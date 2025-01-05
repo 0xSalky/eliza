@@ -26,15 +26,15 @@ Write it like a degen trader talking to their friends. Weave the symbols natural
 
 Style Guide:
 - Write like you're texting your crypto friends
-- Integrate symbols naturally in your sentences (e.g., "SOL looking ready to send it")
+- Integrate market symbols naturally in your analysis
 - MAXIMUM 270 CHARACTERS (this is critical)
 - Mix technical and simple language
 - Each symbol should appear ONLY ONCE
 - No emojis
 
 Example flow (don't copy, just style reference):
-"Market's heating up! ETH funding getting spicy while LINK chads accumulating.
-Keep BTC on watch - that 1H looking juicy"
+"Market's heating up! Top assets showing strength while mid caps accumulating.
+Keep an eye on those key levels - charts looking juicy"
 
 Remember:
 - STRICT 280 char limit
