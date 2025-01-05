@@ -4,9 +4,21 @@ const { Pool } = pkg;
 
 // Create a connection pool
 const pool = new Pool({
-    connectionString: "",
+    connectionString: process.env.DATABASE_MARKET_DATA_URL,
     ssl: false, // Disable SSL
 });
+
+// Clean symbol by removing USDT suffix and numeric prefixes
+const cleanSymbol = (symbol: string): string => {
+    // First remove USDT from the end
+    let cleaned = symbol.replace(/USDT$/, "");
+
+    // Remove numeric prefixes that start with 10 (like 10, 1000, 1000000)
+    // But keep symbols that have numbers as part of their name (like GMT123, B10)
+    cleaned = cleaned.replace(/^10+/, "");
+
+    return cleaned;
+};
 
 export const fetchLlmSummary = async () => {
     const client = await pool.connect();
@@ -48,9 +60,17 @@ export const fetchLlmSummaryWithAssets = async () => {
             throw new Error("No market summary data available");
         }
 
+        // Transform assets data to use cleaned symbol
+        const transformedAssetsSummary = assetsSummary.rows[0]
+            ? {
+                  ...assetsSummary.rows[0],
+                  symbol: cleanSymbol(assetsSummary.rows[0].symbol),
+              }
+            : null;
+
         const result = {
             llmSummary: llmSummary.rows[0].summary_data,
-            assetsSummary: assetsSummary.rows[0],
+            assetsSummary: transformedAssetsSummary,
         };
 
         return result;
@@ -67,7 +87,11 @@ export const getMarketOverallSummary = async (): Promise<string> => {
 
     const marketOverallSummaryWithAssets = {
         metrics: rawMarketData.market_data.metrics,
-        watchlist: rawMarketData.trading_opportunities.watchlist,
+        watchlist:
+            rawMarketData.trading_opportunities?.watchlist?.map((item) => ({
+                ...item,
+                symbol: cleanSymbol(item.symbol),
+            })) || [],
         market_signals: {
             risk_indicators:
                 rawMarketData.market_signals.risk_indicators.market_state,
@@ -78,9 +102,16 @@ export const getMarketOverallSummary = async (): Promise<string> => {
 
 export const getMarketOverallSummaryWithAssets = async (): Promise<string> => {
     const rawMarketData = await fetchLlmSummaryWithAssets();
+
     const marketOverallSummaryWithAssets = {
         metrics: rawMarketData.llmSummary.market_data.metrics,
-        watchlist: rawMarketData.llmSummary.trading_opportunities.watchlist,
+        watchlist:
+            rawMarketData.llmSummary.trading_opportunities?.watchlist?.map(
+                (item) => ({
+                    ...item,
+                    symbol: cleanSymbol(item.symbol),
+                })
+            ) || [],
         market_signals: {
             risk_indicators:
                 rawMarketData.llmSummary.market_signals.risk_indicators
