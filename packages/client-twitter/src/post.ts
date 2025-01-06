@@ -21,9 +21,22 @@ import {
     getMarketOverallSummaryWithAssets,
 } from "./market-data.ts";
 
-const twitterPostTemplate = (
-    marketData: string
-) => `Create a fun, engaging tweet about the crypto market state.
+const twitterPostTemplate = (marketData: string) => `
+# Areas of Expertise
+{{knowledge}}
+
+# About {{agentName}} (@{{twitterUserName}}):
+{{bio}}
+{{lore}}
+{{topics}}
+
+{{providers}}
+
+{{characterPostExamples}}
+
+{{postDirections}}
+
+Create a fun, engaging tweet about the crypto market state.
 Write it like a degen trader talking to their friends. Weave the symbols naturally into your analysis.
 
 Style Guide:
@@ -473,9 +486,7 @@ export class TwitterPostClient {
 
             const context = composeContext({
                 state,
-                template:
-                    this.runtime.character.templates?.twitterPostTemplate ||
-                    twitterPostTemplate(marketOverallSummary),
+                template: twitterPostTemplate(marketOverallSummary),
             });
 
             elizaLogger.debug("generate post prompt:\n" + context);
@@ -571,10 +582,7 @@ export class TwitterPostClient {
     ): Promise<string> {
         const context = composeContext({
             state: tweetState,
-            template:
-                options?.template ||
-                this.runtime.character.templates?.twitterPostTemplate ||
-                twitterPostTemplate(marketData),
+            template: twitterPostTemplate(marketData),
         });
 
         const response = await generateText({
@@ -701,12 +709,9 @@ export class TwitterPostClient {
 
                     const actionContext = composeContext({
                         state: tweetState,
-                        template:
-                            this.runtime.character.templates
-                                ?.twitterActionTemplate ||
-                            twitterActionTemplate(
-                                marketOverallSummaryWithAssets
-                            ),
+                        template: twitterActionTemplate(
+                            marketOverallSummaryWithAssets
+                        ),
                     });
 
                     const actionResponse = await generateTweetActions({

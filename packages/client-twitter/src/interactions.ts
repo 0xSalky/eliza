@@ -21,6 +21,25 @@ import { getMarketOverallSummaryWithAssets } from "./market-data.ts";
 
 export const twitterMessageHandlerTemplate = (marketData: string) =>
     `
+# Areas of Expertise
+{{knowledge}}
+
+# About {{agentName}} (@{{twitterUserName}}):
+{{bio}}
+{{lore}}
+{{topics}}
+
+{{providers}}
+
+{{characterPostExamples}}
+
+{{postDirections}}
+
+Recent interactions between {{agentName}} and other users:
+{{recentPostInteractions}}
+
+{{recentPosts}}
+
 Create a fun, engaging reply about the crypto market state.
 Write it like a degen trader talking to their friends. Weave the symbols naturally into your analysis.
 
@@ -62,8 +81,8 @@ Instructions for asset-specific queries:
 2. If found, use its data (price, funding rate, volume, etc.) in your response
 3. If not found, respond: "Sorry fam, don't have current data for that asset. Let me check what's moving in the market instead!"
 
-Do not add commentary or acknowledge this request, just write the reply.` +
-    messageCompletionFooter;
+Do not add commentary or acknowledge this request, just write the reply.
+{{currentPost}}` + messageCompletionFooter;
 
 export const twitterShouldRespondTemplate = (
     targetUsersStr: string,
@@ -413,14 +432,10 @@ export class TwitterInteractionClient {
 
         const shouldRespondContext = composeContext({
             state,
-            template:
-                this.runtime.character.templates
-                    ?.twitterShouldRespondTemplate ||
-                this.runtime.character?.templates?.shouldRespondTemplate ||
-                twitterShouldRespondTemplate(
-                    validTargetUsersStr,
-                    marketOverallSummaryWithAssets
-                ),
+            template: twitterShouldRespondTemplate(
+                validTargetUsersStr,
+                marketOverallSummaryWithAssets
+            ),
         });
 
         const shouldRespond = await generateShouldRespond({
@@ -437,11 +452,9 @@ export class TwitterInteractionClient {
 
         const context = composeContext({
             state,
-            template:
-                this.runtime.character.templates
-                    ?.twitterMessageHandlerTemplate ||
-                this.runtime.character?.templates?.messageHandlerTemplate ||
-                twitterMessageHandlerTemplate(marketOverallSummaryWithAssets),
+            template: twitterMessageHandlerTemplate(
+                marketOverallSummaryWithAssets
+            ),
         });
 
         elizaLogger.debug("Interactions prompt:\n" + context);
