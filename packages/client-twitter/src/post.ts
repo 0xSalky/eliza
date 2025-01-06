@@ -21,22 +21,9 @@ import {
     getMarketOverallSummaryWithAssets,
 } from "./market-data.ts";
 
-const twitterPostTemplate = (marketData: string) => `
-# Areas of Expertise
-{{knowledge}}
-
-# About {{agentName}} (@{{twitterUserName}}):
-{{bio}}
-{{lore}}
-{{topics}}
-
-{{providers}}
-
-{{characterPostExamples}}
-
-{{postDirections}}
-
-Create a fun, engaging tweet about the crypto market state.
+const twitterPostTemplate = (
+    marketData: string
+) => `Create a fun, engaging tweet about the crypto market state.
 Write it like a degen trader talking to their friends. Weave the symbols naturally into your analysis.
 
 Style Guide:
