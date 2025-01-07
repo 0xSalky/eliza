@@ -56,8 +56,6 @@ ${marketData}`;
 export const twitterActionTemplate = (marketData: string) =>
     `
 # INSTRUCTIONS: Determine actions for {{agentName}} (@{{twitterUserName}}) based on:
-{{bio}}
-{{postDirections}}
 
 # Market Context
 Current Market State:
@@ -74,7 +72,6 @@ Guidelines for Crypto Market Content:
   - Contradictory technical analysis
   - Pure price speculation without substance
   - Unsubstantiated rumors
-{{/if}}
 
 General Guidelines:
 - ONLY engage with content that DIRECTLY relates to character's core interests
