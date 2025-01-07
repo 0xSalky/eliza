@@ -97,6 +97,7 @@ export const getMarketOverallSummary = async (): Promise<string> => {
                 rawMarketData.market_signals.risk_indicators.market_state,
         },
     };
+
     return JSON.stringify(marketOverallSummaryWithAssets, null, 2);
 };
 
@@ -143,3 +144,73 @@ export async function testDatabaseConnection(): Promise<boolean> {
         client.release();
     }
 }
+
+export const marketDataWithPrompts = (marketData: string): string => `
+# Market Analysis Rules
+1. ALWAYS use $ before crypto symbols ($BTC, $ETH, etc)
+2. NEVER use emojis
+3. Each crypto symbol appears ONLY ONCE
+4. Keep to 1-3 sentences
+5. Focus on: market structure, funding rates, liquidations, whales
+
+# Writing Style
+- Mix TA with degen slang (based, cooked, rekt, chad, cope)
+- Start with market observation
+- Add technical insight
+- End with trading psychology note
+
+# Current Market Data:
+${marketData}
+`;
+
+export const marketActionWithPrompts = (marketData: string): string => `
+# Market Context Rules
+1. Compare tweet content with market data
+2. Check if tweet aligns with current:
+   - Market structure
+   - Funding rates
+   - Whale movements
+   - Trading sentiment
+
+# Action Criteria
+- [LIKE]: Tweet matches current market data
+- [RETWEET]: High-quality analysis matching data
+- [QUOTE]: Can add value based on market data
+- [REPLY]: Can contribute market insights
+
+# Current Market Data:
+${marketData}
+`;
+
+export const marketReplyWithPrompts = (marketData: string): string => `
+# Response Rules
+1. ALWAYS use $ before symbols
+2. NO emojis
+3. Each symbol ONCE
+4. Keep to 1-3 sentences
+5. Match reply to market context
+
+# Style Guide
+- Use degen terms (based, cooked, rekt, chad, cope)
+- Stay relevant to market data
+- Keep character voice consistent
+- Be informative and engaging
+
+# Market Context:
+${marketData}
+`;
+
+export const marketShouldRespondPrompts = (marketData: string): string => `
+# Engagement Rules
+1. RESPOND if:
+   - Tweet discusses current market conditions
+   - Analysis aligns with market data
+   - Technical discussion matches data
+2. IGNORE if:
+   - Market context is outdated
+   - Analysis contradicts current data
+   - No relation to market conditions
+
+# Current Market Data:
+${marketData}
+`;

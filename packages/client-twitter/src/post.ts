@@ -19,39 +19,33 @@ import { DEFAULT_MAX_TWEET_LENGTH } from "./environment.ts";
 import {
     getMarketOverallSummary,
     getMarketOverallSummaryWithAssets,
+    marketActionWithPrompts,
+    marketDataWithPrompts,
+    marketReplyWithPrompts,
 } from "./market-data.ts";
 
-const twitterPostTemplate = (
-    marketData: string
-) => `Create a fun, engaging tweet about the crypto market state.
-Write it like a degen trader talking to their friends. Weave the symbols naturally into your analysis.
+const twitterPostTemplate = (marketData: string) => `
+# Areas of Expertise
+{{knowledge}}
 
-Style Guide:
-- Write like you're texting your crypto friends
-- ALWAYS prefix crypto symbols with $ (like $BTC, $ETH, $SOL)
-- Integrate market symbols naturally in your analysis
-- MAXIMUM 270 CHARACTERS (this is critical)
-- Mix technical and simple language
-- Each symbol should appear ONLY ONCE
-- No emojis
+# About {{agentName}} (@{{twitterUserName}}):
+{{bio}}
+{{lore}}
+{{topics}}
 
-Example flow (don't copy, just style reference):
-"Key levels to watch on these moves. Market showing interesting patterns across $SYMBOL1 and $SYMBOL2.
-Always watching the charts fam!"
+{{providers}}
 
-Remember:
-- STRICT 270 char limit
-- Each symbol MUST have $ prefix
-- Each symbol from watchlist appears exactly once
-- Keep it conversational and natural
-- No separate watchlist section at the end
-- Make it fun but informative
-- Base sentiment and symbols ONLY on current market data
+{{characterPostExamples}}
 
-Do not add commentary or acknowledge this request, just write the post.
+{{postDirections}}
 
-Here's the market data:
-${marketData}`;
+# Task: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
+Write a post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
+Your response should be 1, 2, or 3 sentences (choose the length at random).
+Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than {{maxTweetLength}}. No emojis. Use \\n\\n (double spaces) between statements if there are multiple statements in your response.
+
+${marketData}
+`;
 
 export const twitterActionTemplate = (marketData: string) =>
     `
@@ -59,24 +53,7 @@ export const twitterActionTemplate = (marketData: string) =>
 {{bio}}
 {{postDirections}}
 
-# Market Context
-Current Market State:
-${marketData}
-
-Guidelines for Crypto Market Content:
-- PRIORITIZE engagement with:
-  - Technical analysis that aligns with current market data
-  - Market updates that complement our data
-  - Trading insights that match market conditions
-  - On-chain metrics and analysis
-- AVOID:
-  - Outdated market information
-  - Contradictory technical analysis
-  - Pure price speculation without substance
-  - Unsubstantiated rumors
-{{/if}}
-
-General Guidelines:
+Guidelines:
 - ONLY engage with content that DIRECTLY relates to character's core interests
 - Direct mentions are priority IF they are on-topic
 - Skip ALL content that is:
@@ -95,8 +72,10 @@ Actions (respond only with tags):
 Tweet:
 {{currentTweet}}
 
-# Respond with qualifying action tags only. Default to NO action unless extremely confident of relevance.` +
-    postActionResponseFooter;
+# Respond with qualifying action tags only. Default to NO action unless extremely confident of relevance.
+
+${marketData}
+` + postActionResponseFooter;
 
 /**
  * Truncate text to fit within the Twitter character limit, ensuring it ends at a complete sentence.
@@ -473,7 +452,9 @@ export class TwitterPostClient {
 
             const context = composeContext({
                 state,
-                template: twitterPostTemplate(marketOverallSummary),
+                template: twitterPostTemplate(
+                    marketDataWithPrompts(marketOverallSummary)
+                ),
             });
 
             elizaLogger.debug("generate post prompt:\n" + context);
@@ -569,7 +550,7 @@ export class TwitterPostClient {
     ): Promise<string> {
         const context = composeContext({
             state: tweetState,
-            template: twitterPostTemplate(marketData),
+            template: twitterPostTemplate(marketDataWithPrompts(marketData)),
         });
 
         const response = await generateText({
@@ -697,7 +678,9 @@ export class TwitterPostClient {
                     const actionContext = composeContext({
                         state: tweetState,
                         template: twitterActionTemplate(
-                            marketOverallSummaryWithAssets
+                            marketActionWithPrompts(
+                                marketOverallSummaryWithAssets
+                            )
                         ),
                     });
 
@@ -852,12 +835,11 @@ export class TwitterPostClient {
                                     enrichedState,
                                     marketOverallSummaryWithAssets,
                                     {
-                                        template:
-                                            this.runtime.character.templates
-                                                ?.twitterMessageHandlerTemplate ||
-                                            twitterMessageHandlerTemplate(
+                                        template: twitterMessageHandlerTemplate(
+                                            marketReplyWithPrompts(
                                                 marketOverallSummaryWithAssets
-                                            ),
+                                            )
+                                        ),
                                     }
                                 );
 
@@ -1057,12 +1039,9 @@ export class TwitterPostClient {
                 enrichedState,
                 marketOverallSummaryWithAssets,
                 {
-                    template:
-                        this.runtime.character.templates
-                            ?.twitterMessageHandlerTemplate ||
-                        twitterMessageHandlerTemplate(
-                            marketOverallSummaryWithAssets
-                        ),
+                    template: twitterMessageHandlerTemplate(
+                        marketReplyWithPrompts(marketOverallSummaryWithAssets)
+                    ),
                 }
             );
 

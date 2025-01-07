@@ -17,36 +17,34 @@ import {
 } from "@elizaos/core";
 import { ClientBase } from "./base";
 import { buildConversationThread, sendTweet, wait } from "./utils.ts";
-import { getMarketOverallSummaryWithAssets } from "./market-data.ts";
+import {
+    getMarketOverallSummaryWithAssets,
+    marketReplyWithPrompts,
+    marketShouldRespondPrompts,
+} from "./market-data.ts";
 
 export const twitterMessageHandlerTemplate = (marketData: string) =>
     `
-Create a fun, engaging reply about the crypto market state.
-Write it like a degen trader talking to their friends. Weave the symbols naturally into your analysis.
+# Areas of Expertise
+{{knowledge}}
 
-Style Guide:
-- Write like you're texting your crypto friends
-- ALWAYS prefix crypto symbols with $ (like $BTC, $ETH)
-- Integrate market symbols naturally in your analysis
-- MAXIMUM 270 CHARACTERS (this is critical)
-- Mix technical and simple language
-- Each symbol should appear ONLY ONCE
-- No emojis
+# About {{agentName}} (@{{twitterUserName}}):
+{{bio}}
+{{lore}}
+{{topics}}
 
-Example flow (don't copy, just style reference):
-"Key levels to watch on these moves. Market showing interesting patterns across $SYMBOL1 and $SYMBOL2.
-Always watching the charts fam!"
+{{providers}}
 
-Remember:
-- STRICT 280 char limit
-- Each symbol MUST have $ prefix
-- Each symbol from watchlist appears exactly once
-- Keep it conversational and natural
-- No separate watchlist section at the end
-- Make it fun but informative
-- Base sentiment and symbols ONLY on current market data
-- If asked about a specific asset, check if it's in our data first
-- If asset not in our data, politely say you don't have current data for it
+{{characterPostExamples}}
+
+{{postDirections}}
+
+Recent interactions between {{agentName}} and other users:
+{{recentPostInteractions}}
+
+{{recentPosts}}
+
+# TASK: Generate a post/reply in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}) while using the thread of tweets as additional context:
 
 Current Post:
 {{currentPost}}
@@ -54,16 +52,15 @@ Current Post:
 Thread of Tweets You Are Replying To:
 {{formattedConversation}}
 
-Here's the market data:
+# INSTRUCTIONS: Generate a post in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}). You MUST include an action if the current post text includes a prompt that is similar to one of the available actions mentioned here:
+{{actionNames}}
+{{actions}}
+
+Here is the current post text again. Remember to include an action if the current post text includes a prompt that asks for one of the available actions mentioned above (does not need to be exact)
+{{currentPost}}
+
 ${marketData}
-
-Instructions for asset-specific queries:
-1. If the user asks about a specific asset, check if it exists in assets_summary
-2. If found, use its data (price, funding rate, volume, etc.) in your response
-3. If not found, respond: "Sorry fam, don't have current data for that asset. Let me check what's moving in the market instead!"
-
-Do not add commentary or acknowledge this request, just write the reply.` +
-    messageCompletionFooter;
+` + messageCompletionFooter;
 
 export const twitterShouldRespondTemplate = (
     targetUsersStr: string,
@@ -74,19 +71,6 @@ export const twitterShouldRespondTemplate = (
 Response options are RESPOND, IGNORE and STOP.
 
 PRIORITY RULE: ALWAYS RESPOND to these users regardless of topic or message content: ${targetUsersStr}. Topic relevance should be ignored for these users.
-
-Market Discussion Rules:
-- RESPOND to discussions about current market conditions in our data
-- RESPOND to technical analysis that can be validated with our data
-- RESPOND to questions about market trends we can verify
-- RESPOND to questions about specific assets IF they are in our assets_summary data
-- IGNORE questions about assets not in our current data
-- IGNORE price predictions without technical basis
-- IGNORE market rumors we cannot verify
-- IGNORE outdated market information
-
-Here's the market data:
-${marketData}
 
 For other users:
 - {{agentName}} should RESPOND to messages directed at them
@@ -110,8 +94,10 @@ Current Post:
 Thread of Tweets You Are Replying To:
 {{formattedConversation}}
 
-# INSTRUCTIONS: Respond with [RESPOND] if {{agentName}} should respond, or [IGNORE] if {{agentName}} should not respond to the last message and [STOP] if {{agentName}} should stop participating in the conversation.` +
-    shouldRespondFooter;
+# INSTRUCTIONS: Respond with [RESPOND] if {{agentName}} should respond, or [IGNORE] if {{agentName}} should not respond to the last message and [STOP] if {{agentName}} should stop participating in the conversation.
+
+${marketData}
+` + shouldRespondFooter;
 
 export class TwitterInteractionClient {
     client: ClientBase;
@@ -415,7 +401,7 @@ export class TwitterInteractionClient {
             state,
             template: twitterShouldRespondTemplate(
                 validTargetUsersStr,
-                marketOverallSummaryWithAssets
+                marketShouldRespondPrompts(marketOverallSummaryWithAssets)
             ),
         });
 
@@ -434,7 +420,7 @@ export class TwitterInteractionClient {
         const context = composeContext({
             state,
             template: twitterMessageHandlerTemplate(
-                marketOverallSummaryWithAssets
+                marketReplyWithPrompts(marketOverallSummaryWithAssets)
             ),
         });
 
