@@ -16,10 +16,7 @@ import { IImageDescriptionService, ServiceType } from "@elizaos/core";
 import { buildConversationThread } from "./utils.ts";
 import { twitterMessageHandlerTemplate } from "./interactions.ts";
 import { DEFAULT_MAX_TWEET_LENGTH } from "./environment.ts";
-import {
-    getMarketOverallSummary,
-    getMarketOverallSummaryWithAssets,
-} from "./market-data.ts";
+import { fetchLlmSummary, fetchLlmSummaryWithAssets } from "./market-data.ts";
 
 const twitterPostTemplate = (
     marketData: string
@@ -449,7 +446,7 @@ export class TwitterPostClient {
                 "twitter"
             );
 
-            const marketOverallSummary = await getMarketOverallSummary();
+            const marketOverallSummary = await fetchLlmSummary();
 
             const topics = this.runtime.character.topics.join(", ");
 
@@ -656,7 +653,7 @@ export class TwitterPostClient {
             const homeTimeline = await this.client.fetchTimelineForActions(15);
 
             const marketOverallSummaryWithAssets =
-                await getMarketOverallSummaryWithAssets();
+                await fetchLlmSummaryWithAssets();
 
             const results = [];
 
@@ -1047,7 +1044,7 @@ export class TwitterPostClient {
             );
 
             const marketOverallSummaryWithAssets =
-                await getMarketOverallSummaryWithAssets();
+                await fetchLlmSummaryWithAssets();
 
             // Generate and clean the reply content
             const replyText = await this.generateTweetContent(

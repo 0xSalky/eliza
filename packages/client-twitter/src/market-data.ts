@@ -33,7 +33,7 @@ export const fetchLlmSummary = async () => {
         }
 
         // Return the raw summary_data object
-        return result.rows[0].summary_data;
+        return JSON.stringify(result.rows[0].summary_data, null, 2);
     } catch (error) {
         elizaLogger.error("Error fetching market data:", error);
         throw error;
@@ -73,54 +73,13 @@ export const fetchLlmSummaryWithAssets = async () => {
             assetsSummary: transformedAssetsSummary,
         };
 
-        return result;
+        return JSON.stringify(result, null, 2);
     } catch (error) {
         elizaLogger.error("Error fetching market data:", error);
         throw error;
     } finally {
         client.release();
     }
-};
-
-export const getMarketOverallSummary = async (): Promise<string> => {
-    const rawMarketData = await fetchLlmSummary();
-
-    const marketOverallSummaryWithAssets = {
-        metrics: rawMarketData.market_data.metrics,
-        watchlist:
-            rawMarketData.trading_opportunities?.watchlist?.map((item) => ({
-                ...item,
-                symbol: cleanSymbol(item.symbol),
-            })) || [],
-        market_signals: {
-            risk_indicators:
-                rawMarketData.market_signals.risk_indicators.market_state,
-        },
-    };
-    return JSON.stringify(marketOverallSummaryWithAssets, null, 2);
-};
-
-export const getMarketOverallSummaryWithAssets = async (): Promise<string> => {
-    const rawMarketData = await fetchLlmSummaryWithAssets();
-
-    const marketOverallSummaryWithAssets = {
-        metrics: rawMarketData.llmSummary.market_data.metrics,
-        watchlist:
-            rawMarketData.llmSummary.trading_opportunities?.watchlist?.map(
-                (item) => ({
-                    ...item,
-                    symbol: cleanSymbol(item.symbol),
-                })
-            ) || [],
-        market_signals: {
-            risk_indicators:
-                rawMarketData.llmSummary.market_signals.risk_indicators
-                    .market_state,
-        },
-        assets_summary: rawMarketData.assetsSummary,
-    };
-
-    return JSON.stringify(marketOverallSummaryWithAssets, null, 2);
 };
 
 // Handle pool errors

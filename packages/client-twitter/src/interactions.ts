@@ -17,7 +17,7 @@ import {
 } from "@elizaos/core";
 import { ClientBase } from "./base";
 import { buildConversationThread, sendTweet, wait } from "./utils.ts";
-import { getMarketOverallSummaryWithAssets } from "./market-data.ts";
+import { fetchLlmSummaryWithAssets } from "./market-data.ts";
 
 export const twitterMessageHandlerTemplate = (marketData: string) =>
     `
@@ -409,7 +409,7 @@ export class TwitterInteractionClient {
             this.client.twitterConfig.TWITTER_TARGET_USERS.join(",");
 
         const marketOverallSummaryWithAssets =
-            await getMarketOverallSummaryWithAssets();
+            await fetchLlmSummaryWithAssets();
 
         const shouldRespondContext = composeContext({
             state,
