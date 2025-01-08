@@ -59,8 +59,25 @@ export class MarketDataService extends Service implements IMarketDataService {
                 throw new Error("No market data available");
             }
 
-            // Return the raw summary_data object
-            return JSON.stringify(result.rows[0].summary_data, null, 2);
+            // Clean up symbols in market_opportunities
+            const summaryData = result.rows[0].summary_data;
+            if (summaryData.actionable_insights?.market_opportunities) {
+                summaryData.actionable_insights.market_opportunities =
+                    summaryData.actionable_insights.market_opportunities.map(
+                        (opportunity: any) => ({
+                            ...opportunity,
+                            asset_info: {
+                                ...opportunity.asset_info,
+                                symbol: this.cleanSymbol(
+                                    opportunity.asset_info.symbol
+                                ),
+                            },
+                        })
+                    );
+            }
+
+            // Return the cleaned summary_data object
+            return JSON.stringify(summaryData, null, 2);
         } catch (error) {
             elizaLogger.error("Error fetching market data:", error);
             throw error;

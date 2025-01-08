@@ -20,12 +20,15 @@ export const marketDataPlugin: Plugin = {
                     const summary = await marketData.fetchLlmSummary();
                     const parsed = JSON.parse(summary);
                     // Convert to string and clean up the output
-                    return JSON.stringify(parsed)
-                        .replace(/\\/g, "")
-                        .replace(/"{/g, "{")
-                        .replace(/}"/g, "}")
-                        .replace(/"\[/g, "[")
-                        .replace(/\]"/g, "]");
+                    return (
+                        "Here's the market data: " +
+                        JSON.stringify(parsed)
+                            .replace(/\\/g, "")
+                            .replace(/"{/g, "{")
+                            .replace(/}"/g, "}")
+                            .replace(/"\[/g, "[")
+                            .replace(/\]"/g, "]")
+                    );
                 } catch (error) {
                     return "Unable to fetch market data";
                 }
