@@ -52,32 +52,15 @@ export class MarketDataService extends Service implements IMarketDataService {
         try {
             // Get the latest market summary
             const result = await client.query(
-                "SELECT summary_data FROM market_summary_for_llm ORDER BY analysis_timestamp DESC LIMIT 1"
+                "SELECT text_summary FROM market_summary_for_llm ORDER BY analysis_timestamp DESC LIMIT 1"
             );
 
             if (result.rows.length === 0) {
                 throw new Error("No market data available");
             }
 
-            // Clean up symbols in market_opportunities
-            const summaryData = result.rows[0].summary_data;
-            if (summaryData.actionable_insights?.market_opportunities) {
-                summaryData.actionable_insights.market_opportunities =
-                    summaryData.actionable_insights.market_opportunities.map(
-                        (opportunity: any) => ({
-                            ...opportunity,
-                            asset_info: {
-                                ...opportunity.asset_info,
-                                symbol: this.cleanSymbol(
-                                    opportunity.asset_info.symbol
-                                ),
-                            },
-                        })
-                    );
-            }
-
             // Return the cleaned summary_data object
-            return JSON.stringify(summaryData, null, 2);
+            return result.rows[0].text_summary;
         } catch (error) {
             elizaLogger.error("Error fetching market data:", error);
             throw error;
@@ -92,7 +75,7 @@ export class MarketDataService extends Service implements IMarketDataService {
         try {
             // Get the latest market summary
             const llmSummary = await client.query(
-                "SELECT summary_data FROM market_summary_for_llm ORDER BY analysis_timestamp DESC LIMIT 1"
+                "SELECT text_summary FROM market_summary_for_llm ORDER BY analysis_timestamp DESC LIMIT 1"
             );
 
             // Get the latest assets analysis
@@ -113,7 +96,7 @@ export class MarketDataService extends Service implements IMarketDataService {
                 : null;
 
             const result = {
-                llmSummary: llmSummary.rows[0].summary_data,
+                llmSummary: llmSummary.rows[0].text_summary,
                 assetsSummary: transformedAssetsSummary,
             };
 
