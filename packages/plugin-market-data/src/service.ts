@@ -50,16 +50,22 @@ export class MarketDataService extends Service implements IMarketDataService {
     async fetchLlmSummary(): Promise<string> {
         const client = await this.pool.connect();
         try {
-            // Get the latest market summary
-            const result = await client.query(
-                "SELECT text_summary FROM market_summary_for_llm ORDER BY analysis_timestamp DESC LIMIT 1"
-            );
+            const queries = [
+                "SELECT text_summary FROM futures_summary_for_llm ORDER BY analysis_timestamp DESC LIMIT 1",
+                "SELECT text_summary FROM spot_summary_for_llm ORDER BY analysis_timestamp DESC LIMIT 1",
+                // "SELECT text_summary FROM scrapper_following_llm_analysis ORDER BY analysis_timestamp DESC LIMIT 1",
+            ];
+
+            // Randomly select one query
+            const selectedQuery =
+                queries[Math.floor(Math.random() * queries.length)];
+
+            const result = await client.query(selectedQuery);
 
             if (result.rows.length === 0) {
                 throw new Error("No market data available");
             }
 
-            // Return the cleaned summary_data object
             return result.rows[0].text_summary;
         } catch (error) {
             elizaLogger.error("Error fetching market data:", error);
@@ -73,34 +79,76 @@ export class MarketDataService extends Service implements IMarketDataService {
         const client = await this.pool.connect();
 
         try {
-            // Get the latest market summary
-            const llmSummary = await client.query(
-                "SELECT text_summary FROM market_summary_for_llm ORDER BY analysis_timestamp DESC LIMIT 1"
+            // Get the latest futures summary
+            const futuresLlmSummary = await client.query(
+                "SELECT text_summary FROM futures_summary_for_llm"
             );
 
-            // Get the latest assets analysis
-            const assetsSummary = await client.query(
-                "SELECT * FROM market_assets_analysis ORDER BY timestamp DESC LIMIT 1"
+            // Get the latest futures assets analysis
+            const futuresAssetsSummary = await client.query(
+                "SELECT * FROM futures_assets_analysis"
             );
 
-            if (llmSummary.rows.length === 0) {
+            // Get the latest spot summary
+            const spotLlmSummary = await client.query(
+                "SELECT text_summary FROM spot_summary_for_llm"
+            );
+
+            // Get the latest spot assets analysis
+            const spotAssetsSummary = await client.query(
+                "SELECT * FROM spot_assets_analysis"
+            );
+
+            const scrapperLlmSummary = await client.query(
+                "SELECT analysis FROM scrapper_following_llm_analysis"
+            );
+
+            if (
+                futuresLlmSummary.rows.length === 0 &&
+                futuresAssetsSummary.rows.length === 0 &&
+                spotLlmSummary.rows.length === 0 &&
+                spotAssetsSummary.rows.length === 0 &&
+                scrapperLlmSummary.rows.length === 0
+            ) {
                 throw new Error("No market summary data available");
             }
 
             // Transform assets data to use cleaned symbol
-            const transformedAssetsSummary = assetsSummary.rows[0]
+            const transformedFuturesAssetsSummary = futuresAssetsSummary.rows[0]
                 ? {
-                      ...assetsSummary.rows[0],
-                      symbol: this.cleanSymbol(assetsSummary.rows[0].symbol),
+                      ...futuresAssetsSummary.rows[0],
+                      symbol: this.cleanSymbol(
+                          futuresAssetsSummary.rows[0].symbol
+                      ),
+                  }
+                : null;
+
+            const transformedSpotAssetsSummary = spotAssetsSummary.rows[0]
+                ? {
+                      ...spotAssetsSummary.rows[0],
+                      symbol: this.cleanSymbol(
+                          spotAssetsSummary.rows[0].symbol
+                      ),
                   }
                 : null;
 
             const result = {
-                llmSummary: llmSummary.rows[0].text_summary,
-                assetsSummary: transformedAssetsSummary,
+                futuresAnalysis: futuresLlmSummary.rows[0].text_summary,
+                futuresAssetsAnalysis: transformedFuturesAssetsSummary,
+                spotAnalysis: spotLlmSummary.rows[0].text_summary,
+                spotAssetsAnalysis: transformedSpotAssetsSummary,
+                twittersAnalysis: scrapperLlmSummary.rows[0].analysis,
             };
 
-            return JSON.stringify(result, null, 2);
+            const resultPrompt = `
+            Futures Analysis: ${result.futuresAnalysis},
+            Futures Assets Analysis: ${result.futuresAssetsAnalysis},
+            Spot Analysis: ${result.spotAnalysis},
+            Spot Assets Analysis: ${result.spotAssetsAnalysis},
+            Twitters Analysis: ${result.twittersAnalysis}
+            `;
+
+            return resultPrompt;
         } catch (error) {
             elizaLogger.error("Error fetching market data:", error);
             throw error;
